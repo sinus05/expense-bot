@@ -1,0 +1,14 @@
+{
+  "name": "littlebritain-worldlink-expense-bot",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Telegram bot for logging Little Britain and WorldLink business expenses into a Google Sheet.",
+  "main": "api/webhook.js",
+  "scripts": {
+    "set-webhook": "node scripts/set-webhook.js"
+  },
+  "dependencies": {
+    "telegraf": "^4.16.3",
+    "googleapis": "^140.0.0"
+  }
+}
