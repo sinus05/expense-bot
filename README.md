@@ -18,7 +18,7 @@ Deploys the same way as littlebritaindaycare.com: GitHub → Vercel.
 |---|---|
 | `/expense` | Log a direct purchase/reimbursement (no advance risk) |
 | `/advance` | Record cash handed to someone in advance |
-| `/settle <ID>` | Reconcile an advance: attach receipt + amount spent + change returned |
+| `/settle <ID>` | Reconcile an advance — the bot asks one simple question at a time |
 | `/open` | List advances not yet settled, with how many hours they've been outstanding |
 | `/receipt <ID>` | Re-show a saved receipt photo/PDF on demand |
 | `/today` | Today's direct expenses |
@@ -119,8 +119,10 @@ You should see `{"ok":true,"result":true,...}`.
 1. `/start` — see the command list.
 2. `/advance` → pick a brand → pick a category → reply `500000 test advance`.
 3. Bot replies with an ID, e.g. `A1B2C3`.
-4. `/settle A1B2C3` → reply (as a reply to that message) with a photo of anything + caption `480000 20000`, or just text `no receipt 480000 20000`.
-5. Bot confirms and — since 500000 ≠ 480000 + 20000 — should show `🚩 Short by 0` (they match exactly in this example; try mismatched numbers to see the flag fire).
+4. `/settle A1B2C3` → bot asks "Do you have a receipt?" — tap **No receipt**.
+5. Bot asks "how much was actually spent?" → reply `450000`.
+6. Bot asks "how much change was returned?" → reply `30000`.
+7. Since 500000 ≠ 450000 + 30000, the bot should reply `🚩 Short by 20,000 UZS`.
 6. Check the `Advances` tab — the row should now show `Settled` (or `Settled-Discrepancy`), with the numbers filled in.
 7. Delete the test row when done.
 
