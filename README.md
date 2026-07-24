@@ -1,12 +1,17 @@
-# Little Britain / WorldLink Expense & Cash Advance Bot
+# Little Britain / WorldLink Expense & Wallet Bot
 
 Tracks two different kinds of money movement:
 
-- **Direct expenses** (`/expense`) — you already paid for something, log it for the records.
-- **Cash advances** (`/advance` → `/settle`) — money is handed to someone *before* they buy anything.
-  This is where the "who pocketed the change" problem lives, so the bot forces a
-  three-way match every time: **cash given** vs **receipt total** vs **change returned**.
-  Any gap between them is flagged automatically, by name, every time you run `/report`.
+- **Direct payments** (`/directpay`) — rent, salaries, bank transfers — money that never
+  passes through anyone's hands as cash.
+- **Cash wallets** (`/advance` to top up → `/expense` to spend → `/return` to hand back
+  what's left) — every person who carries cash for the business has a running wallet
+  balance. Spending more than you're holding simply isn't allowed: the bot blocks it
+  and tells you how short you are. There's nothing to reconcile after the fact —
+  the math is enforced at the moment of spending.
+
+Access is gated: new chats have to register a nickname and get approved by an admin
+before they can touch any money command.
 
 Deploys the same way as littlebritaindaycare.com: GitHub → Vercel.
 
@@ -16,17 +21,20 @@ Deploys the same way as littlebritaindaycare.com: GitHub → Vercel.
 
 | Command | Purpose |
 |---|---|
-| `/expense` | Log a direct purchase/reimbursement (no advance risk) |
-| `/advance` | Record cash handed to someone in advance |
-| `/settle <ID>` | Reconcile an advance — the bot asks one simple question at a time |
-| `/open` | List advances not yet settled, with how many hours they've been outstanding |
-| `/receipt <ID>` | Re-show a saved receipt photo/PDF on demand |
-| `/today` | Today's direct expenses |
-| `/report` | This month: spend vs budget, outstanding cash, flagged discrepancies |
-| `/getid` | Shows this chat's Telegram ID (needed for overdue alerts, see Phase 6) |
+| `/start` | Register (first time) or show the quick-action menu |
+| `/expense` | Log a cash purchase — deducted from your wallet automatically |
+| `/directpay` | Log a payment that didn't come from cash (rent, salary, bank transfer) |
+| `/advance` | Top up your cash wallet (you're taking cash to go spend) |
+| `/return` | Hand back cash you didn't spend, reducing your wallet balance |
+| `/wallet` | Your current wallet balance |
+| `/wallets` | Everyone's current wallet balance, and how long they've held it |
+| `/today` | Today's logged expenses |
+| `/report` | This month: spend vs budget, cash still outstanding |
+| `/cancel` | Bail out of whatever prompt you're mid-reply to |
+| `/getid` | Shows this chat's Telegram ID (needed for admin/alert setup) |
 
-A scheduled check (once a day) also flags any advance still open after 24 hours,
-even if nobody runs `/open` — see Phase 6.
+A scheduled check (once a day) also flags any wallet still holding cash 24h+ after
+its last activity, even if nobody runs `/wallets` — see Phase 6.
 
 ---
 
@@ -36,18 +44,26 @@ even if nobody runs `/open` — see Phase 6.
 2. Send `/newbot`, follow the prompts, name it (e.g. "LB WorldLink Expenses").
 3. Copy the token it gives you (`123456:ABC-DEF...`) → save as `BOT_TOKEN`.
 
-## 2. Create the Google Sheet (3 tabs)
+## 2. Create the Google Sheet (4 tabs)
 
-Create a new Google Sheet (**sheets.new**), then set up three tabs exactly as below
+Create a new Google Sheet (**sheets.new**), then set up four tabs exactly as below
 — tab names and headers must match exactly.
 
 **Tab 1 — `Expenses`**
-`Timestamp | Brand | Category | Amount | Description | User`
+`Timestamp | Brand | Category | Amount | Description | User | Source`
+(`Source` is filled in automatically — `Wallet` or `Direct`.)
 
-**Tab 2 — `Advances`**
-`ID | IssuedAt | Brand | Category | AmountIssued | Purpose | IssuedTo | Status | SettledAt | AmountSpent | ChangeReturned | Discrepancy | ReceiptFileId | ReceiptType | Note | LastFlaggedAt`
+**Tab 2 — `Wallet`**
+`Timestamp | TelegramID | Nickname | Type | Brand | Category | Amount | Description`
+This is a running ledger, not something you edit by hand — `Type` is `TopUp`,
+`Expense`, or `Return`, and a person's current balance is just the sum of their rows.
 
-**Tab 3 — `Budgets`** *(optional but recommended — this is what powers the "over budget" warnings)*
+**Tab 3 — `Users`**
+`TelegramID | Username | Nickname | Status | RequestedAt | ApprovedAt | ApprovedBy | LastFlaggedAt`
+Filled in automatically as people register and get approved/denied. You generally
+won't need to edit this by hand.
+
+**Tab 4 — `Budgets`** *(optional but recommended — this is what powers the "over budget" warnings)*
 `Brand | Category | MonthlyBudget`
 Fill in one row per brand/category you want to track, e.g.:
 `Little Britain | Food & Catering | 3000000`
@@ -68,9 +84,9 @@ Copy the **Sheet ID** from the URL:
 
 ## 4. Push the code to GitHub
 
-1. Unzip `expense-bot.zip`.
+1. Unzip `expense-bot.zip` (or use this repo directly).
 2. On github.com: **+ → New repository** → name it `expense-bot` → Private → Create.
-3. Click **"uploading an existing file"** → drag in everything from the unzipped folder → **Commit changes**.
+3. Push/upload the code → **Commit changes**.
 
 ## 5. Deploy to Vercel
 
@@ -82,27 +98,30 @@ Copy the **Sheet ID** from the URL:
    | `BOT_TOKEN` | from Phase 1 |
    | `GOOGLE_SHEET_ID` | from Phase 2 |
    | `GOOGLE_SERVICE_ACCOUNT_JSON` | full JSON blob from Phase 3 |
-   | `DISCREPANCY_TOLERANCE` | `2000` (or your preferred tolerance in UZS) |
+   | `ADMIN_IDS` | leave blank for now — you'll add it in Phase 6 |
    | `ALERT_CHAT_ID` | leave blank for now — you'll add it in Phase 6 |
 
 3. **Deploy**. Copy the resulting URL, e.g. `https://expense-bot-sinus05.vercel.app`.
 
-## 6. Turn on overdue alerts
+## 6. Set yourself up as admin
 
-1. Message your bot `/getid` — it replies with a number. That's your chat's Telegram ID.
-2. In Vercel → Project → Settings → Environment Variables, set `ALERT_CHAT_ID` to that number.
-3. Redeploy (Vercel → Deployments → ⋯ → Redeploy) so the new variable takes effect.
+1. Message your bot `/getid` — it replies with a number. That's your Telegram ID
+   (this works even before you're registered).
+2. In Vercel → Project → Settings → Environment Variables, set `ADMIN_IDS` to that
+   number (comma-separate if there's more than one admin, e.g. `111,222`).
+3. Set `ALERT_CHAT_ID` to the same chat ID (or a group chat you want registration
+   requests and stale-wallet alerts sent to).
+4. Redeploy (Vercel → Deployments → ⋯ → Redeploy) so the new variables take effect.
 
-This project includes `vercel.json`, which registers a **daily** check (`/api/check-overdue`)
-that messages `ALERT_CHAT_ID` listing any advance still open past `OVERDUE_HOURS` (default 24h).
+Admins skip registration entirely and are the only ones who can tap **Approve/Deny**
+on new registration requests.
 
 > **Note on timing:** Vercel's free Hobby plan only allows cron jobs to run **once per day**,
 > and the exact minute can drift within that hour — it is not a live, minute-by-minute check.
-> In practice this means an overdue advance gets flagged once a day, which is normally enough
-> to catch money that's been sitting out too long. If you want faster (e.g. hourly) alerts,
-> that requires Vercel's paid Pro plan ($20/mo). Also worth knowing: Vercel's Hobby tier is
-> intended for non-commercial use under their fair-use terms — something to keep in mind since
-> this is a business tool, even though many small teams run exactly this kind of thing on it.
+> If you want faster (e.g. hourly) alerts, that requires Vercel's paid Pro plan ($20/mo).
+> Also worth knowing: Vercel's Hobby tier is intended for non-commercial use under their
+> fair-use terms — something to keep in mind since this is a business tool, even though
+> many small teams run exactly this kind of thing on it.
 
 ## 7. Set the Telegram webhook
 
@@ -116,45 +135,42 @@ You should see `{"ok":true,"result":true,...}`.
 
 ## 8. Test it
 
-1. `/start` — see the command list.
-2. `/advance` → pick a brand → pick a category → reply `500000 test advance`.
-3. Bot replies with an ID, e.g. `A1B2C3`.
-4. `/settle A1B2C3` → bot asks "Do you have a receipt?" — tap **No receipt**.
-5. Bot asks "how much was actually spent?" → reply `450000`.
-6. Bot asks "how much change was returned?" → reply `30000`.
-7. Since 500000 ≠ 450000 + 30000, the bot should reply `🚩 Short by 20,000 UZS`.
-6. Check the `Advances` tab — the row should now show `Settled` (or `Settled-Discrepancy`), with the numbers filled in.
-7. Delete the test row when done.
+1. `/start` — as a non-admin test account, this asks for a nickname, then sends a
+   request to `ALERT_CHAT_ID` with Approve/Deny buttons.
+2. Approve it from the admin account → the test account gets notified and can now `/start` again to see the menu.
+3. `/advance` → pick a brand → pick a category → reply `500000 test top-up`. Bot confirms a wallet balance of 500,000.
+4. `/expense` → pick a brand/category → reply `450000 test purchase`. Bot deducts it, new balance 50,000.
+5. `/expense` again for `100000 another purchase` → bot should refuse: not enough in the wallet.
+6. `/return 50000` → wallet balance goes to 0.
+7. Check the `Wallet` and `Expenses` tabs — rows should match what you just did. Delete the test rows when done.
 
 ---
 
-## How this actually catches the problem
+## How this actually works
 
-Before: cash goes out, receipts trickle back "sometimes," and nobody can say
-with certainty whether what came back matches what went out.
+Before: cash goes out, receipts trickle back "sometimes," and reconciling what
+was spent against what was handed out happens after the fact — if at all.
 
-After: every advance has an ID, an owner, and a deadline. Settling it requires
-typing the actual amount spent and change returned — and the sheet does the
-subtraction for you. A shortfall doesn't require anyone to go looking for it;
-it appears in `/report` under 🚩 Discrepancies, tied to whoever the cash was
-given to, every single month, whether or not a receipt was attached.
+After: every person's wallet is just a running total (top-ups minus what they've
+logged as spent or returned). Logging an expense checks the balance **before**
+it's allowed to save — so the sheet can never end up saying someone spent money
+they never had. There's no separate settlement step and nothing to reconcile.
 
 ## Customizing
 
 - **Categories/brands**: edit `lib/categories.js`.
 - **Budgets**: edit the `Budgets` tab directly in the sheet — no redeploy needed.
-- **Tolerance / overdue timing**: adjust `DISCREPANCY_TOLERANCE`, `OVERDUE_HOURS`,
-  `REFLAG_HOURS` in Vercel's environment variables.
-- **Who can use it**: currently open to anyone who finds the bot. If you want it
-  restricted to specific staff, tell me their Telegram usernames and I'll add an allow-list.
+- **Overdue timing**: adjust `OVERDUE_HOURS`, `REFLAG_HOURS` in Vercel's environment variables.
+- **Who can use it**: gated by registration + admin approval (see Phase 6). To add another
+  admin, add their Telegram ID to `ADMIN_IDS`.
 
 ## Troubleshooting
 
 | Symptom | Likely fix |
 |---|---|
 | Bot doesn't respond | Recheck the Phase 7 URL — typo in token, or missing `/api/webhook` |
-| "Could not save" errors | Service account wasn't given Editor on the sheet, or `GOOGLE_SHEET_ID` is wrong |
+| "Could not save" errors | Service account wasn't given Editor on the sheet, or `GOOGLE_SHEET_ID` is wrong, or a tab is missing/misnamed |
+| Stuck at "awaiting admin approval" | An admin needs to tap Approve on the request sent to `ALERT_CHAT_ID` — check `ADMIN_IDS` is set correctly |
 | No budget line in `/report` | `Budgets` tab missing, misnamed, or that brand/category has no row there |
-| No overdue alerts | `ALERT_CHAT_ID` not set, or a day hasn't passed yet — see Phase 6's timing note |
-| `/receipt` fails on an old entry | Telegram file references can occasionally stop resolving after a very long time — this is rare but possible for receipts from many months back |
+| No stale-wallet alerts | `ALERT_CHAT_ID` not set, or a day hasn't passed yet — see Phase 6's timing note |
 | Detailed errors | Vercel dashboard → project → Deployments → latest → View Function Logs |

@@ -1,5 +1,5 @@
 const bot = require('../lib/bot');
-const { getOverdueAdvances, markAdvanceFlagged } = require('../lib/sheets');
+const { getStaleWallets, markUserFlagged } = require('../lib/sheets');
 
 const OVERDUE_HOURS = parseFloat(process.env.OVERDUE_HOURS) || 24;
 const REFLAG_HOURS = parseFloat(process.env.REFLAG_HOURS) || 24;
@@ -17,23 +17,22 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const overdue = await getOverdueAdvances(OVERDUE_HOURS, REFLAG_HOURS);
+    const stale = await getStaleWallets(OVERDUE_HOURS, REFLAG_HOURS);
 
-    if (overdue.length > 0 && process.env.ALERT_CHAT_ID) {
-      let msg = `⚠️ ${overdue.length} cash advance(s) still open after ${OVERDUE_HOURS}h:\n\n`;
-      for (const { values, hoursOpen } of overdue) {
-        const [id, , brand, category, amount, purpose, issuedTo] = values;
-        msg += `• ${id} — ${brand}/${category}: ${formatMoney(parseFloat(amount))} to ${issuedTo}, open ${Math.round(hoursOpen)}h${purpose ? ` — ${purpose}` : ''}\n`;
+    if (stale.length > 0 && process.env.ALERT_CHAT_ID) {
+      let msg = `⚠️ ${stale.length} wallet(s) still holding cash after ${OVERDUE_HOURS}h:\n\n`;
+      for (const s of stale) {
+        msg += `• ${s.nickname || 'unknown'}: ${formatMoney(s.balance)}, held ${Math.round(s.hoursOpen)}h\n`;
       }
-      msg += `\nSettle with /settle <ID>`;
+      msg += `\nSettle up with /return, or check /wallets.`;
       await bot.telegram.sendMessage(process.env.ALERT_CHAT_ID, msg);
 
-      for (const { rowNumber, values } of overdue) {
-        await markAdvanceFlagged(rowNumber, values);
+      for (const s of stale) {
+        await markUserFlagged(s.telegramId);
       }
     }
 
-    res.status(200).json({ ok: true, flagged: overdue.length });
+    res.status(200).json({ ok: true, flagged: stale.length });
   } catch (err) {
     console.error('check-overdue failed:', err);
     res.status(500).json({ ok: false, error: String(err) });
