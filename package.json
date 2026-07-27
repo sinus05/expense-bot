@@ -8,7 +8,8 @@
     "set-webhook": "node scripts/set-webhook.js"
   },
   "dependencies": {
-    "telegraf": "^4.16.3",
-    "googleapis": "^140.0.0"
+    "@googleapis/sheets": "^13.0.2",
+    "google-auth-library": "^10.9.1",
+    "telegraf": "^4.16.3"
   }
 }
