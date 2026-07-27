@@ -6,9 +6,11 @@ Tracks two different kinds of money movement:
   passes through anyone's hands as cash.
 - **Cash wallets** (`/advance` to top up → `/expense` to spend → `/return` to hand back
   what's left) — every person who carries cash for the business has a running wallet
-  balance. Spending more than you're holding simply isn't allowed: the bot blocks it
-  and tells you how short you are. There's nothing to reconcile after the fact —
-  the math is enforced at the moment of spending.
+  balance. Topping up is just cash, no brand/category attached to it — those only
+  apply when the money actually gets spent via `/expense`. Spending more than you're
+  holding simply isn't allowed: the bot blocks it and tells you how short you are.
+  There's nothing to reconcile after the fact — the math is enforced at the moment
+  of spending.
 
 Access is gated: new chats have to register a nickname and get approved by an admin
 before they can touch any money command.
@@ -24,7 +26,7 @@ Deploys the same way as littlebritaindaycare.com: GitHub → Vercel.
 | `/start` | Register (first time) or show the quick-action menu |
 | `/expense` | Log a cash purchase — deducted from your wallet automatically |
 | `/directpay` | Log a payment that didn't come from cash (rent, salary, bank transfer) |
-| `/advance` | Top up your cash wallet (you're taking cash to go spend) |
+| `/advance` | Top up your cash wallet (just an amount — no brand/category) |
 | `/return` | Hand back cash you didn't spend, reducing your wallet balance |
 | `/wallet` | Your current wallet balance |
 | `/wallets` | Everyone's current wallet balance, and how long they've held it |
@@ -138,7 +140,7 @@ You should see `{"ok":true,"result":true,...}`.
 1. `/start` — as a non-admin test account, this asks for a nickname, then sends a
    request to `ALERT_CHAT_ID` with Approve/Deny buttons.
 2. Approve it from the admin account → the test account gets notified and can now `/start` again to see the menu.
-3. `/advance` → pick a brand → pick a category → reply `500000 test top-up`. Bot confirms a wallet balance of 500,000.
+3. `/advance` → reply `500000 test top-up`. Bot confirms a wallet balance of 500,000.
 4. `/expense` → pick a brand/category → reply `450000 test purchase`. Bot deducts it, new balance 50,000.
 5. `/expense` again for `100000 another purchase` → bot should refuse: not enough in the wallet.
 6. `/return 50000` → wallet balance goes to 0.
