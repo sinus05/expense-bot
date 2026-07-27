@@ -1,6 +1,6 @@
 # Little Britain / WorldLink Expense & Wallet Bot
 
-Tracks two different kinds of money movement:
+Tracks three different kinds of money movement:
 
 - **Direct payments** (`/directpay`) — rent, salaries, bank transfers — money that never
   passes through anyone's hands as cash.
@@ -11,6 +11,10 @@ Tracks two different kinds of money movement:
   holding simply isn't allowed: the bot blocks it and tells you how short you are.
   There's nothing to reconcile after the fact — the math is enforced at the moment
   of spending.
+- **Reimbursements** (`/reimburse` → admin marks it paid via `/owed`) — for when someone
+  pays out of their own pocket instead of company cash. Filing a claim logs it as a
+  real expense right away (so reports aren't missing anything) and tracks it as owed
+  until an admin confirms they've actually paid the person back.
 
 Access is gated: new chats have to register a nickname and get approved by an admin
 before they can touch any money command.
@@ -28,6 +32,8 @@ Deploys the same way as littlebritaindaycare.com: GitHub → Vercel.
 | `/directpay` | Log a payment that didn't come from cash (rent, salary, bank transfer) |
 | `/advance` | Top up your cash wallet (just an amount — no brand/category) |
 | `/return` | Hand back cash you didn't spend, reducing your wallet balance |
+| `/reimburse` | Claim back money you paid from your own pocket |
+| `/owed` | See pending reimbursement claims (admins get a "mark as paid" button per claim) |
 | `/wallet` | Your current wallet balance |
 | `/wallets` | Everyone's current wallet balance, and how long they've held it |
 | `/today` | Today's logged expenses |
@@ -46,14 +52,15 @@ its last activity, even if nobody runs `/wallets` — see Phase 6.
 2. Send `/newbot`, follow the prompts, name it (e.g. "LB WorldLink Expenses").
 3. Copy the token it gives you (`123456:ABC-DEF...`) → save as `BOT_TOKEN`.
 
-## 2. Create the Google Sheet (4 tabs)
+## 2. Create the Google Sheet (5 tabs)
 
-Create a new Google Sheet (**sheets.new**), then set up four tabs exactly as below
-— tab names and headers must match exactly.
+Create a new Google Sheet (**sheets.new**), then set up five tabs exactly as below
+— tab names and headers must match exactly. (`node scripts/provision-sheet.js` can
+create/fix these tabs for you automatically — see the script's header comment.)
 
 **Tab 1 — `Expenses`**
 `Timestamp | Brand | Category | Amount | Description | User | Source`
-(`Source` is filled in automatically — `Wallet` or `Direct`.)
+(`Source` is filled in automatically — `Wallet`, `Direct`, or `Reimbursement`.)
 
 **Tab 2 — `Wallet`**
 `Timestamp | TelegramID | Nickname | Type | Brand | Category | Amount | Description`
@@ -65,7 +72,12 @@ This is a running ledger, not something you edit by hand — `Type` is `TopUp`,
 Filled in automatically as people register and get approved/denied. You generally
 won't need to edit this by hand.
 
-**Tab 4 — `Budgets`** *(optional but recommended — this is what powers the "over budget" warnings)*
+**Tab 4 — `Reimbursements`**
+`ID | Timestamp | TelegramID | Nickname | Brand | Category | Amount | Description | Status | SettledAt | SettledBy`
+Filled in automatically when someone files a claim via `/reimburse` and when an
+admin marks it paid. `Status` is `Pending` or `Paid`.
+
+**Tab 5 — `Budgets`** *(optional but recommended — this is what powers the "over budget" warnings)*
 `Brand | Category | MonthlyBudget`
 Fill in one row per brand/category you want to track, e.g.:
 `Little Britain | Food & Catering | 3000000`
@@ -144,7 +156,8 @@ You should see `{"ok":true,"result":true,...}`.
 4. `/expense` → pick a brand/category → reply `450000 test purchase`. Bot deducts it, new balance 50,000.
 5. `/expense` again for `100000 another purchase` → bot should refuse: not enough in the wallet.
 6. `/return 50000` → wallet balance goes to 0.
-7. Check the `Wallet` and `Expenses` tabs — rows should match what you just did. Delete the test rows when done.
+7. `/reimburse` → pick a brand/category → reply `50000 test claim`. Bot gives you a claim ID and notifies `ALERT_CHAT_ID` with a "Mark as paid" button — tap it from the admin account and the claimant gets notified.
+8. Check the `Wallet`, `Expenses`, and `Reimbursements` tabs — rows should match what you just did. Delete the test rows when done.
 
 ---
 

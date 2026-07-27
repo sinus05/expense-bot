@@ -1,7 +1,8 @@
-// One-off migration script: creates the Wallet and Users tabs (with headers)
-// and adds the Source column to Expenses if missing. Safe to re-run — it
-// only creates/writes what's missing.
-const { google } = require('googleapis');
+// One-off migration script: creates the Wallet, Users, and Reimbursements
+// tabs (with headers) and adds the Source column to Expenses if missing.
+// Safe to re-run — it only creates/writes what's missing.
+const { sheets } = require('@googleapis/sheets');
+const { GoogleAuth } = require('google-auth-library');
 
 const SHEET_ID = process.env.GOOGLE_SHEET_ID;
 const EXPENSES_TAB = process.env.GOOGLE_SHEET_TAB || 'Expenses';
@@ -12,29 +13,29 @@ async function main() {
   }
 
   const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT_JSON);
-  const auth = new google.auth.GoogleAuth({
+  const auth = new GoogleAuth({
     credentials,
     scopes: ['https://www.googleapis.com/auth/spreadsheets'],
   });
   const authClient = await auth.getClient();
-  const sheets = google.sheets({ version: 'v4', auth: authClient });
+  const sheetsClient = sheets({ version: 'v4', auth: authClient });
 
-  const meta = await sheets.spreadsheets.get({ spreadsheetId: SHEET_ID });
+  const meta = await sheetsClient.spreadsheets.get({ spreadsheetId: SHEET_ID });
   const existingTitles = meta.data.sheets.map((s) => s.properties.title);
   console.log('Existing tabs:', existingTitles.join(', '));
 
-  const tabsToCreate = ['Wallet', 'Users'].filter((t) => !existingTitles.includes(t));
+  const tabsToCreate = ['Wallet', 'Users', 'Reimbursements'].filter((t) => !existingTitles.includes(t));
   if (tabsToCreate.length > 0) {
-    await sheets.spreadsheets.batchUpdate({
+    await sheetsClient.spreadsheets.batchUpdate({
       spreadsheetId: SHEET_ID,
       requestBody: { requests: tabsToCreate.map((title) => ({ addSheet: { properties: { title } } })) },
     });
     console.log('Created tabs:', tabsToCreate.join(', '));
   } else {
-    console.log('Wallet and Users tabs already exist — skipping creation.');
+    console.log('Wallet, Users, and Reimbursements tabs already exist — skipping creation.');
   }
 
-  await sheets.spreadsheets.values.update({
+  await sheetsClient.spreadsheets.values.update({
     spreadsheetId: SHEET_ID,
     range: 'Wallet!A1:H1',
     valueInputOption: 'USER_ENTERED',
@@ -44,7 +45,7 @@ async function main() {
   });
   console.log('Wallet headers written.');
 
-  await sheets.spreadsheets.values.update({
+  await sheetsClient.spreadsheets.values.update({
     spreadsheetId: SHEET_ID,
     range: 'Users!A1:H1',
     valueInputOption: 'USER_ENTERED',
@@ -54,13 +55,23 @@ async function main() {
   });
   console.log('Users headers written.');
 
-  const expHeaderRes = await sheets.spreadsheets.values.get({
+  await sheetsClient.spreadsheets.values.update({
+    spreadsheetId: SHEET_ID,
+    range: 'Reimbursements!A1:K1',
+    valueInputOption: 'USER_ENTERED',
+    requestBody: {
+      values: [['ID', 'Timestamp', 'TelegramID', 'Nickname', 'Brand', 'Category', 'Amount', 'Description', 'Status', 'SettledAt', 'SettledBy']],
+    },
+  });
+  console.log('Reimbursements headers written.');
+
+  const expHeaderRes = await sheetsClient.spreadsheets.values.get({
     spreadsheetId: SHEET_ID,
     range: `${EXPENSES_TAB}!A1:G1`,
   });
   const headerRow = (expHeaderRes.data.values && expHeaderRes.data.values[0]) || [];
   if (headerRow[6] !== 'Source') {
-    await sheets.spreadsheets.values.update({
+    await sheetsClient.spreadsheets.values.update({
       spreadsheetId: SHEET_ID,
       range: `${EXPENSES_TAB}!G1`,
       valueInputOption: 'USER_ENTERED',
